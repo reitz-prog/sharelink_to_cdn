@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Google Drive to Shareable Image</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1f232c;
+    --border: #2a2f3a;
+    --text: #e6e8ee;
+    --muted: #8b93a7;
+    --accent: #6ea8ff;
+    --accent-2: #4f8cff;
+    --ok: #4ade80;
+    --warn: #f59e0b;
+    --err: #f87171;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  a { color: var(--accent); }
+  header { padding: 24px 20px 8px; max-width: 1100px; margin: 0 auto; }
+  header h1 { margin: 0 0 4px; font-size: 22px; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px 20px 80px; display: grid; gap: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .card h2 { margin: 0 0 12px; font-size: 14px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input[type=text], textarea, select {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; font: inherit; width: 100%;
+  }
+  textarea { font-family: var(--mono); font-size: 12.5px; min-height: 120px; resize: vertical; }
+  input[type=text]:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent-2); }
+  button {
+    background: var(--accent-2); color: white; border: 0; border-radius: 8px;
+    padding: 10px 14px; font: inherit; cursor: pointer; font-weight: 600;
+  }
+  button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); font-weight: 500; }
+  button:hover { filter: brightness(1.1); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .controls { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
+  @media (max-width: 640px) { .controls { grid-template-columns: 1fr; } }
+  .size-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .chip {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 10px; font-size: 12px; cursor: pointer; user-select: none; color: var(--muted);
+  }
+  .chip.on { background: var(--accent-2); color: white; border-color: var(--accent-2); }
+  .empty { color: var(--muted); font-style: italic; padding: 20px; text-align: center; }
+  .results { display: grid; gap: 12px; }
+  .result {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px; display: grid; grid-template-columns: 88px 1fr; gap: 12px;
+  }
+  .result .thumb {
+    width: 88px; height: 88px; border-radius: 8px; background: #000;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .result .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .result .thumb.broken { color: var(--muted); font-size: 11px; text-align: center; padding: 4px; }
+  .result .info { display: grid; gap: 6px; min-width: 0; }
+  .result .id { font-family: var(--mono); font-size: 12px; color: var(--muted); word-break: break-all; }
+  .urls { display: grid; gap: 4px; }
+  .url-row {
+    display: grid; grid-template-columns: 90px 1fr auto; gap: 8px; align-items: center;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px;
+  }
+  .url-row .label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .url-row .url { font-family: var(--mono); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+  .url-row button { padding: 4px 10px; font-size: 11px; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; flex-wrap: wrap; }
+  .count { color: var(--muted); font-size: 12px; }
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--ok); color: #0f1115; padding: 10px 16px; border-radius: 8px;
+    font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+  .file-drop {
+    border: 2px dashed var(--border); border-radius: 8px; padding: 20px; text-align: center;
+    color: var(--muted); cursor: pointer; transition: all .15s;
+  }
+  .file-drop:hover, .file-drop.drag { border-color: var(--accent); color: var(--text); background: var(--panel-2); }
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .tab {
+    padding: 8px 14px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent;
+    font-weight: 500; user-select: none;
+  }
+  .tab.on { color: var(--text); border-bottom-color: var(--accent-2); }
+  .pane { display: none; }
+  .pane.on { display: block; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Google Drive to Shareable Image</h1>
+  <p>Convert Google Drive share links to <code>lh3.googleusercontent.com</code> URLs at multiple sizes. All client-side.</p>
+</header>
+<main>
+
+  <section class="card">
+    <h2>Sizes</h2>
+    <div class="size-chips" id="sizes"></div>
+  </section>
+
+  <section class="card">
+    <div class="tabs">
+      <div class="tab on" data-tab="single">Single link</div>
+      <div class="tab" data-tab="bulk">Bulk paste</div>
+      <div class="tab" data-tab="file">Upload file</div>
+    </div>
+
+    <div class="pane on" data-pane="single">
+      <div class="controls">
+        <input type="text" id="singleInput" placeholder="https://drive.google.com/file/d/FILE_ID/view?usp=sharing" />
+        <button id="singleGo">Convert</button>
+        <button class="secondary" id="singleClear">Clear</button>
+      </div>
+    </div>
+
+    <div class="pane" data-pane="bulk">
+      <textarea id="bulkInput" placeholder="Paste any text — Drive links will be auto-extracted.&#10;https://drive.google.com/file/d/ID1/view&#10;https://drive.google.com/open?id=ID2&#10;..."></textarea>
+      <div class="row" style="margin-top: 8px;">
+        <button id="bulkGo">Extract & Convert</button>
+        <button class="secondary" id="bulkClear">Clear</button>
+      </div>
+    </div>
+
+    <div class="pane" data-pane="file">
+      <label class="file-drop" id="fileDrop">
+        <div><strong>Click or drop a file</strong></div>
+        <div style="font-size: 12px; margin-top: 4px;">.txt, .csv, .html, .md, .json — any text format</div>
+        <input type="file" id="fileInput" hidden accept=".txt,.csv,.html,.htm,.md,.json,.tsv,text/*" />
+      </label>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="toolbar">
+      <h2 style="margin: 0;">Results</h2>
+      <div class="row">
+        <span class="count" id="count">0 items</span>
+        <button class="secondary" id="copyAll">Copy all (CSV)</button>
+        <button class="secondary" id="downloadAll">Download CSV</button>
+        <button class="secondary" id="clearAll">Clear results</button>
+      </div>
+    </div>
+    <div id="results" class="results"><div class="empty">No results yet.</div></div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast">Copied!</div>
+
+<script>
+const SIZE_PRESETS = [
+  { key: 's200',  label: 'Thumbnail', param: 's200',  default: true },
+  { key: 's400',  label: 'Small',     param: 's400',  default: true },
+  { key: 's800',  label: 'Medium',    param: 's800',  default: true },
+  { key: 's1600', label: 'Large',     param: 's1600', default: true },
+  { key: 's0',    label: 'Original',  param: 's0',    default: true },
+];
+const STORAGE_KEY = 'sharelink_cdn_sizes_v1';
+
+let activeSizes = (() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (Array.isArray(saved) && saved.length) return new Set(saved);
+  } catch {}
+  return new Set(SIZE_PRESETS.filter(s => s.default).map(s => s.key));
+})();
+
+const results = []; // [{id, urls: {sizeKey: url}}]
+
+function extractIds(text) {
+  if (!text) return [];
+  const ids = new Set();
+  const patterns = [
+    /\/file\/d\/([a-zA-Z0-9_-]{20,})/g,
+    /[?&]id=([a-zA-Z0-9_-]{20,})/g,
+    /\/d\/([a-zA-Z0-9_-]{20,})/g,
+    /lh3\.googleusercontent\.com\/d\/([a-zA-Z0-9_-]{20,})/g,
+  ];
+  for (const re of patterns) {
+    let m; while ((m = re.exec(text)) !== null) ids.add(m[1]);
+  }
+  // Also accept bare IDs (one per line, looks like a Drive ID)
+  for (const line of text.split(/\s+/)) {
+    const t = line.trim();
+    if (/^[a-zA-Z0-9_-]{25,}$/.test(t)) ids.add(t);
+  }
+  return [...ids];
+}
+
+function buildUrl(id, param) {
+  return `https://lh3.googleusercontent.com/d/${id}=${param}`;
+}
+
+function buildResult(id) {
+  const urls = {};
+  for (const s of SIZE_PRESETS) urls[s.key] = buildUrl(id, s.param);
+  return { id, urls };
+}
+
+function addIds(ids) {
+  const existing = new Set(results.map(r => r.id));
+  let added = 0;
+  for (const id of ids) {
+    if (existing.has(id)) continue;
+    results.push(buildResult(id));
+    existing.add(id);
+    added++;
+  }
+  render();
+  if (added) toast(`Added ${added} item${added === 1 ? '' : 's'}`);
+  else if (ids.length) toast('No new IDs (already in list)');
+  else toast('No Drive IDs found', true);
+}
+
+function render() {
+  const root = document.getElementById('results');
+  document.getElementById('count').textContent = `${results.length} item${results.length === 1 ? '' : 's'}`;
+  if (!results.length) {
+    root.innerHTML = '<div class="empty">No results yet.</div>';
+    return;
+  }
+  root.innerHTML = '';
+  for (const r of results) {
+    const el = document.createElement('div');
+    el.className = 'result';
+    const thumbUrl = buildUrl(r.id, 's200');
+    el.innerHTML = `
+      <div class="thumb"><img loading="lazy" src="${thumbUrl}" alt="" onerror="this.parentElement.classList.add('broken'); this.replaceWith(Object.assign(document.createElement('div'),{textContent:'no preview'}));"></div>
+      <div class="info">
+        <div class="id">${escapeHtml(r.id)} <button class="secondary" style="padding:2px 8px;font-size:11px;margin-left:6px;" data-remove="${escapeAttr(r.id)}">remove</button></div>
+        <div class="urls"></div>
+      </div>
+    `;
+    const urlBox = el.querySelector('.urls');
+    for (const s of SIZE_PRESETS) {
+      if (!activeSizes.has(s.key)) continue;
+      const url = r.urls[s.key];
+      const row = document.createElement('div');
+      row.className = 'url-row';
+      row.innerHTML = `
+        <span class="label">${s.label}</span>
+        <span class="url" title="${escapeAttr(url)}">${escapeHtml(url)}</span>
+        <button data-copy="${escapeAttr(url)}">Copy</button>
+      `;
+      urlBox.appendChild(row);
+    }
+    root.appendChild(el);
+  }
+}
+
+function renderSizeChips() {
+  const root = document.getElementById('sizes');
+  root.innerHTML = '';
+  for (const s of SIZE_PRESETS) {
+    const c = document.createElement('div');
+    c.className = 'chip' + (activeSizes.has(s.key) ? ' on' : '');
+    c.textContent = s.label;
+    c.onclick = () => {
+      if (activeSizes.has(s.key)) activeSizes.delete(s.key);
+      else activeSizes.add(s.key);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...activeSizes]));
+      renderSizeChips(); render();
+    };
+    root.appendChild(c);
+  }
+}
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escapeAttr(s) { return escapeHtml(s); }
+
+let toastTimer;
+function toast(msg, isErr) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = isErr ? 'var(--err)' : 'var(--ok)';
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1600);
+}
+
+async function copy(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Copied');
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+    toast('Copied');
+  }
+}
+
+function buildCsv() {
+  const sizeKeys = SIZE_PRESETS.filter(s => activeSizes.has(s.key)).map(s => s.key);
+  const headers = ['id', ...sizeKeys];
+  const lines = [headers.join(',')];
+  for (const r of results) {
+    const row = [r.id, ...sizeKeys.map(k => r.urls[k])];
+    lines.push(row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+  }
+  return lines.join('\n');
+}
+
+// --- Wire up ---
+document.addEventListener('click', (e) => {
+  const copyTarget = e.target.closest('[data-copy]');
+  if (copyTarget) { copy(copyTarget.getAttribute('data-copy')); return; }
+  const removeTarget = e.target.closest('[data-remove]');
+  if (removeTarget) {
+    const id = removeTarget.getAttribute('data-remove');
+    const i = results.findIndex(r => r.id === id);
+    if (i >= 0) { results.splice(i, 1); render(); }
+  }
+});
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t === tab));
+    const name = tab.getAttribute('data-tab');
+    document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.getAttribute('data-pane') === name));
+  };
+});
+
+document.getElementById('singleGo').onclick = () => {
+  const v = document.getElementById('singleInput').value;
+  addIds(extractIds(v));
+};
+document.getElementById('singleInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('singleGo').click();
+});
+document.getElementById('singleClear').onclick = () => { document.getElementById('singleInput').value = ''; };
+
+document.getElementById('bulkGo').onclick = () => {
+  addIds(extractIds(document.getElementById('bulkInput').value));
+};
+document.getElementById('bulkClear').onclick = () => { document.getElementById('bulkInput').value = ''; };
+
+const fileDrop = document.getElementById('fileDrop');
+const fileInput = document.getElementById('fileInput');
+fileInput.onchange = (e) => {
+  const f = e.target.files[0];
+  if (f) readFile(f);
+  fileInput.value = '';
+};
+['dragenter','dragover'].forEach(ev => fileDrop.addEventListener(ev, e => { e.preventDefault(); fileDrop.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev => fileDrop.addEventListener(ev, e => { e.preventDefault(); fileDrop.classList.remove('drag'); }));
+fileDrop.addEventListener('drop', e => {
+  const f = e.dataTransfer.files[0];
+  if (f) readFile(f);
+});
+function readFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => addIds(extractIds(String(reader.result || '')));
+  reader.onerror = () => toast('Failed to read file', true);
+  reader.readAsText(file);
+}
+
+document.getElementById('copyAll').onclick = () => {
+  if (!results.length) return toast('Nothing to copy', true);
+  copy(buildCsv());
+};
+document.getElementById('downloadAll').onclick = () => {
+  if (!results.length) return toast('Nothing to download', true);
+  const blob = new Blob([buildCsv()], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'drive-cdn-links.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+document.getElementById('clearAll').onclick = () => { results.length = 0; render(); };
+
+renderSizeChips();
+render();
+</script>
+</body>
+</html>
